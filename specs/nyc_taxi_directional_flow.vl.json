@@ -1,0 +1,67 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "data": {"name": "databricks_query"},
+  "width": "container",
+  "height": "container",
+  "background": "#DCECF5",
+  "autosize": {"type": "fit", "contains": "padding", "resize": true},
+  "padding": 12,
+  "projection": {"type": "mercator"},
+  "layer": [
+    {
+      "data": {"name": "nyc_basemap"},
+      "mark": {"type": "geoshape", "stroke": "#FFFFFF", "strokeWidth": 0.7, "opacity": 0.97},
+      "encoding": {
+        "color": {
+          "field": "properties.borough",
+          "type": "nominal",
+          "legend": null,
+          "scale": {
+            "domain": ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", "EWR"],
+            "range": ["#F4E1B9", "#D8E8D3", "#E4DDF0", "#F1D2CC", "#D1E4D4", "#E2DED4"]
+          }
+        }
+      }
+    },
+    {
+      "transform": [
+        {"calculate": "(atan2(datum.dy_total, datum.dx_total) * 180 / PI + 360) % 360", "as": "bearing_degrees"},
+        {"calculate": "datum.distance_total / datum.trip_count", "as": "mean_distance"}
+      ],
+      "mark": {"type": "point", "shape": "wedge", "filled": true, "stroke": "white", "strokeWidth": 0.45, "opacity": 0.88},
+      "encoding": {
+        "longitude": {"field": "longitude", "type": "quantitative"},
+        "latitude": {"field": "latitude", "type": "quantitative"},
+        "angle": {"field": "bearing_degrees", "type": "quantitative", "scale": null},
+        "size": {
+          "field": "trip_count",
+          "type": "quantitative",
+          "scale": {"type": "sqrt", "range": [45, 620]},
+          "legend": {"title": "Outbound trips", "orient": "bottom", "format": "~s"}
+        },
+        "color": {
+          "field": "pickup_borough",
+          "type": "nominal",
+          "legend": {"title": null, "orient": "bottom", "direction": "horizontal", "columns": 3},
+          "scale": {
+            "domain": ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", "EWR"],
+            "range": ["#F2A900", "#2D7F78", "#243B64", "#B84A3A", "#AB4057", "#8C8A82"]
+          }
+        },
+        "tooltip": [
+          {"field": "pickup_zone", "title": "Pickup zone"},
+          {"field": "pickup_borough", "title": "Borough"},
+          {"field": "trip_count", "type": "quantitative", "format": ",d", "title": "Trips in selection"},
+          {"field": "bearing_degrees", "type": "quantitative", "format": ".0f", "title": "Mean direction (°)"},
+          {"field": "mean_distance", "type": "quantitative", "format": ".1f", "title": "Mean distance (mi)"}
+        ]
+      }
+    }
+  ],
+  "resolve": {"scale": {"color": "independent"}},
+  "config": {
+    "font": "Arial",
+    "view": {"stroke": null},
+    "legend": {"labelColor": "#4B5563", "titleColor": "#4B5563", "labelFontSize": 10, "titleFontSize": 10}
+  }
+}

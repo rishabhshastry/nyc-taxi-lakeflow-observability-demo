@@ -1,0 +1,49 @@
+.DS_Store
+.databricks/
+.env
+.env.*
+.venv/
+__pycache__/
+*.py[cod]
+
+# Workspace-specific deployment payloads and validation output
+deployment/create_dashboard.json
+deployment/deployment.json
+deployment/query_validation.json
+deployment/update_dashboard.json
+deployment/previews/
+
+# Local research and capture artifacts
+comparison/
+screenshots_v1/
+screenshots_v2/
+
+# Local project notes and client-workspace handoffs
+/CUSTOM_VIZ_PROGRESS_HANDOFF.md
+/DASHBOARD.md
+/FINDINGS.md
+/NYC_NON_NATIVE_VIZ_FINDINGS.md
+/NYC_VEGA_LITE_CANDIDATES_V2.md
+/PIPELINE_MONITORING_*.md
+/instruction.md
+/pipeline_monitoring_instruction.md
+
+# Superseded visualization research retained only in the local workspace
+/scripts/build_basemap_geojson.py
+/scripts/compute_zone_centroids.py
+/scripts/export_zone_boundaries.py
+/scripts/validate_specs.py
+/specs/flight_airport_connections.vl.json
+/specs/nyc_taxi_animated_trails.vl.json
+/specs/nyc_taxi_day_wheel.vl.json
+/specs/nyc_taxi_flow_map.vl.json
+/specs/nyc_taxi_od_chord.vl.json
+/specs/nyc_taxi_ridgeline.vl.json
+/specs/nyc_taxi_shareability_network.vl.json
+/sql/00_summary.sql
+/sql/01_hour_profile.sql
+/sql/02_ridgeline.sql
+/sql/03_od_flow.sql
+/sql/04_od_chord.sql
+/sql/05_shareability.sql
+/sql/06_animated_trails.sql

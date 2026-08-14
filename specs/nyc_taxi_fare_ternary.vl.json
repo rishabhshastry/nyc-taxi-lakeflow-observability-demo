@@ -1,0 +1,128 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "data": {"name": "databricks_query"},
+  "width": 650,
+  "height": 560,
+  "background": "#FFFFFF",
+  "padding": {"left": 54, "right": 54, "top": 40, "bottom": 36},
+  "transform": [
+    {"calculate": "datum.fare_total + datum.tip_total + datum.extras_total", "as": "component_total"},
+    {"filter": "datum.component_total > 0"},
+    {"calculate": "datum.fare_total / datum.component_total", "as": "fare_share"},
+    {"calculate": "datum.tip_total / datum.component_total", "as": "tip_share"},
+    {"calculate": "datum.extras_total / datum.component_total", "as": "extras_share"},
+    {"calculate": "datum.pickup_borough + ' · ' + datum.payment_category + ' · ' + datum.airport_flag", "as": "segment_id"},
+    {"calculate": "sqrt(datum.fare_share) + sqrt(datum.tip_share) + sqrt(datum.extras_share)", "as": "root_total"},
+    {"calculate": "sqrt(datum.tip_share) / datum.root_total", "as": "display_tip_share"},
+    {"calculate": "sqrt(datum.extras_share) / datum.root_total", "as": "display_extras_share"},
+    {"calculate": "0.5 * (2 * datum.display_extras_share + datum.display_tip_share)", "as": "display_x"},
+    {"calculate": "0.8660254 * datum.display_tip_share", "as": "display_y"}
+  ],
+  "layer": [
+    {
+      "data": {"values": [{"order": 0, "x": 0, "y": 0}, {"order": 1, "x": 1, "y": 0}, {"order": 2, "x": 0.5, "y": 0.8660254}, {"order": 3, "x": 0, "y": 0}]},
+      "mark": {"type": "line", "stroke": "#243B64", "strokeWidth": 1.7},
+      "encoding": {
+        "x": {"field": "x", "type": "quantitative", "scale": {"domain": [-0.08, 1.08]}, "axis": null},
+        "y": {"field": "y", "type": "quantitative", "scale": {"domain": [-0.08, 0.94]}, "axis": null},
+        "order": {"field": "order", "type": "ordinal"}
+      }
+    },
+    {
+      "data": {"values": [{"level": 0.2}, {"level": 0.4}, {"level": 0.6}, {"level": 0.8}]},
+      "transform": [
+        {"calculate": "0.5 * datum.level", "as": "x1"},
+        {"calculate": "1 - 0.5 * datum.level", "as": "x2"},
+        {"calculate": "0.8660254 * datum.level", "as": "gy"}
+      ],
+      "mark": {"type": "rule", "stroke": "#D1D5DB", "strokeDash": [3, 3], "strokeWidth": 0.7},
+      "encoding": {
+        "x": {"field": "x1", "type": "quantitative", "scale": {"domain": [-0.08, 1.08]}, "axis": null},
+        "x2": {"field": "x2"},
+        "y": {"field": "gy", "type": "quantitative", "scale": {"domain": [-0.08, 0.94]}, "axis": null},
+        "y2": {"field": "gy"}
+      }
+    },
+    {
+      "data": {"values": [{"level": 0.2}, {"level": 0.4}, {"level": 0.6}, {"level": 0.8}]},
+      "transform": [
+        {"calculate": "1 - datum.level", "as": "x1"},
+        {"calculate": "0.5 * (1 - datum.level)", "as": "x2"},
+        {"calculate": "0", "as": "y1"},
+        {"calculate": "0.8660254 * (1 - datum.level)", "as": "y2"}
+      ],
+      "mark": {"type": "rule", "stroke": "#D1D5DB", "strokeDash": [3, 3], "strokeWidth": 0.7},
+      "encoding": {
+        "x": {"field": "x1", "type": "quantitative", "scale": {"domain": [-0.08, 1.08]}, "axis": null},
+        "y": {"field": "y1", "type": "quantitative", "scale": {"domain": [-0.08, 0.94]}, "axis": null},
+        "x2": {"field": "x2"},
+        "y2": {"field": "y2"}
+      }
+    },
+    {
+      "data": {"values": [{"level": 0.2}, {"level": 0.4}, {"level": 0.6}, {"level": 0.8}]},
+      "transform": [
+        {"calculate": "datum.level", "as": "x1"},
+        {"calculate": "0.5 + 0.5 * datum.level", "as": "x2"},
+        {"calculate": "0", "as": "y1"},
+        {"calculate": "0.8660254 * (1 - datum.level)", "as": "y2"}
+      ],
+      "mark": {"type": "rule", "stroke": "#D1D5DB", "strokeDash": [3, 3], "strokeWidth": 0.7},
+      "encoding": {
+        "x": {"field": "x1", "type": "quantitative", "scale": {"domain": [-0.08, 1.08]}, "axis": null},
+        "y": {"field": "y1", "type": "quantitative", "scale": {"domain": [-0.08, 0.94]}, "axis": null},
+        "x2": {"field": "x2"},
+        "y2": {"field": "y2"}
+      }
+    },
+    {
+      "data": {"values": [{"x": -0.03, "y": -0.035, "label": "METER FARE 100%"}, {"x": 1.03, "y": -0.035, "label": "EXTRAS 100%"}, {"x": 0.5, "y": 0.91, "label": "TIP 100%"}]},
+      "mark": {"type": "text", "fontSize": 11, "fontWeight": "bold", "color": "#243B64"},
+      "encoding": {
+        "x": {"field": "x", "type": "quantitative", "scale": {"domain": [-0.08, 1.08]}, "axis": null},
+        "y": {"field": "y", "type": "quantitative", "scale": {"domain": [-0.08, 0.94]}, "axis": null},
+        "text": {"field": "label"}
+      }
+    },
+    {
+      "params": [{"name": "segment_select", "select": {"type": "point", "fields": ["segment_id"], "on": "click", "clear": "dblclick"}}],
+      "mark": {"type": "point", "filled": true, "stroke": "white", "strokeWidth": 1.1},
+      "encoding": {
+        "x": {"field": "display_x", "type": "quantitative", "scale": {"domain": [-0.08, 1.08]}, "axis": null},
+        "y": {"field": "display_y", "type": "quantitative", "scale": {"domain": [-0.08, 0.94]}, "axis": null},
+        "size": {
+          "field": "trip_count",
+          "type": "quantitative",
+          "scale": {"type": "sqrt", "range": [32, 520]},
+          "legend": {"title": "Trips", "format": "~s", "orient": "bottom"}
+        },
+        "color": {
+          "field": "pickup_borough",
+          "type": "nominal",
+          "legend": {"title": null, "orient": "bottom", "direction": "horizontal", "columns": 3},
+          "scale": {
+            "domain": ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", "EWR"],
+            "range": ["#F2A900", "#2D7F78", "#243B64", "#B84A3A", "#AB4057", "#8C8A82"]
+          }
+        },
+        "shape": {
+          "field": "airport_flag",
+          "type": "nominal",
+          "legend": {"title": null, "orient": "bottom"},
+          "scale": {"domain": ["Non-airport", "Airport"], "range": ["circle", "triangle"]}
+        },
+        "opacity": {"condition": {"param": "segment_select", "empty": false, "value": 0.96}, "value": 0.30},
+        "tooltip": [
+          {"field": "pickup_borough", "title": "Pickup borough"},
+          {"field": "payment_category", "title": "Payment"},
+          {"field": "airport_flag", "title": "Trip type"},
+          {"field": "trip_count", "type": "quantitative", "format": ",d", "title": "Trips in selection"},
+          {"field": "fare_share", "type": "quantitative", "format": ".1%", "title": "Meter-fare share"},
+          {"field": "tip_share", "type": "quantitative", "format": ".1%", "title": "Tip share"},
+          {"field": "extras_share", "type": "quantitative", "format": ".1%", "title": "Extras share"}
+        ]
+      }
+    }
+  ],
+  "config": {"font": "Arial", "view": {"stroke": null}, "legend": {"labelColor": "#4B5563", "titleColor": "#4B5563", "labelFontSize": 10, "titleFontSize": 10}}
+}

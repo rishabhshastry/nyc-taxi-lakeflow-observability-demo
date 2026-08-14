@@ -1,0 +1,46 @@
+resources:
+  pipelines:
+    nyc_taxi_dashboard:
+      name: NYC Taxi dashboard silver and gold
+      catalog: ${var.catalog}
+      schema: ${resources.schemas.nyc_taxi_pipeline_schema.name}
+      serverless: true
+      continuous: false
+      photon: true
+      channel: CURRENT
+      root_path: ../src/nyc_taxi_pipeline
+
+      libraries:
+        - glob:
+            include: ../src/nyc_taxi_pipeline/transformations/**
+
+      event_log:
+        catalog: ${var.catalog}
+        schema: ${resources.schemas.nyc_taxi_pipeline_schema.name}
+        name: nyc_taxi_pipeline_event_log
+
+      configuration:
+        source.landing_path: /Volumes/${var.catalog}/${var.landing_schema}/${var.landing_volume}
+        source.expected_year: "2025"
+        source.expected_month_count: "12"
+        schema_location_base: /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_pipeline_schema.name}/${resources.volumes.nyc_taxi_pipeline_metadata.name}/schemas
+        demo.failure_mode: none
+        demo.test_run_id: normal
+        monitoring.environment: ${bundle.target}
+        monitoring.workspace_url: ${workspace.host}
+        monitoring.hook.enabled: ${var.hook_enabled}
+        monitoring.hook.destination_type: slack
+        monitoring.hook.secret_scope: ${var.hook_secret_scope}
+        monitoring.hook.secret_key: ${var.hook_secret_key}
+        monitoring.hook.emit_flow_metrics: "true"
+        monitoring.hook.dq_failure_ratio_warn: "0.01"
+        monitoring.hook.dq_min_records: "1000"
+        monitoring.hook.expected_writer_flows: yellow_trips_2025_raw,yellow_trips_2025,yellow_trips_2025_quarantine,taxi_zones,mart_airport_quantile_fan,mart_directional_flow_field,mart_od_connection_map,mart_parallel_coordinates,mart_zone_demand_horizon,mart_fare_ternary
+
+      tags:
+        workload: nyc-taxi-custom-viz
+        environment: ${bundle.target}
+
+      permissions:
+        - level: CAN_VIEW
+          group_name: users

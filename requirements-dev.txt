@@ -1,0 +1,2 @@
+databricks-sdk>=0.66.0
+vl-convert-python>=1.8.0

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "data": {"name": "databricks_query"},
+  "background": "#FFFFFF",
+  "spacing": 3,
+  "title": {"text": "SELECTED 2025 RANGE", "anchor": "end", "fontSize": 10, "fontWeight": "normal", "color": "#6B7280", "offset": 3},
+  "transform": [
+    {"calculate": "datum.expected_trip_count > 0 ? (datum.trip_count - datum.expected_trip_count) / datum.expected_trip_count : 0", "as": "deviation_ratio"},
+    {"calculate": "max(-3, min(3, datum.deviation_ratio * 3))", "as": "deviation_score"},
+    {"calculate": "max(datum.deviation_score, 0)", "as": "positive_score"},
+    {"calculate": "max(-datum.deviation_score, 0)", "as": "negative_score"}
+  ],
+  "facet": {
+    "row": {
+      "field": "pickup_zone",
+      "type": "nominal",
+      "header": {"title": null, "labelAngle": 0, "labelAlign": "left", "labelFontSize": 9, "labelLimit": 145, "labelColor": "#4B5563"}
+    }
+  },
+  "spec": {
+    "width": 610,
+    "height": 55,
+    "encoding": {
+      "x": {
+        "field": "trip_date",
+        "type": "temporal",
+        "scale": {"nice": false},
+        "axis": {"title": null, "labels": false, "ticks": false, "domain": false, "grid": false}
+      }
+    },
+    "layer": [
+      {
+        "mark": {"type": "area", "clip": true, "color": "#99DDB4", "opacity": 0.78, "interpolate": "monotone"},
+        "encoding": {
+          "y": {"field": "positive_score", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null},
+          "tooltip": [
+            {"field": "pickup_zone", "title": "Zone"},
+            {"field": "pickup_borough", "title": "Borough"},
+            {"field": "trip_date", "type": "temporal", "format": "%b %d, %Y", "title": "Date"},
+            {"field": "trip_count", "type": "quantitative", "format": ",d", "title": "Trips in selected hours"},
+            {"field": "expected_trip_count", "type": "quantitative", "format": ",.0f", "title": "Same-weekday baseline"},
+            {"field": "deviation_ratio", "type": "quantitative", "format": "+.1%", "title": "Deviation"}
+          ]
+        }
+      },
+      {
+        "transform": [{"calculate": "datum.positive_score - 1", "as": "band_value"}],
+        "mark": {"type": "area", "clip": true, "color": "#2D7F78", "opacity": 0.84, "interpolate": "monotone"},
+        "encoding": {"y": {"field": "band_value", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null}}
+      },
+      {
+        "transform": [{"calculate": "datum.positive_score - 2", "as": "band_value"}],
+        "mark": {"type": "area", "clip": true, "color": "#0E4F4A", "opacity": 0.90, "interpolate": "monotone"},
+        "encoding": {"y": {"field": "band_value", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null}}
+      },
+      {
+        "mark": {"type": "area", "clip": true, "color": "#FCA4A1", "opacity": 0.72, "interpolate": "monotone"},
+        "encoding": {"y": {"field": "negative_score", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null}}
+      },
+      {
+        "transform": [{"calculate": "datum.negative_score - 1", "as": "band_value"}],
+        "mark": {"type": "area", "clip": true, "color": "#B84A3A", "opacity": 0.82, "interpolate": "monotone"},
+        "encoding": {"y": {"field": "band_value", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null}}
+      },
+      {
+        "transform": [{"calculate": "datum.negative_score - 2", "as": "band_value"}],
+        "mark": {"type": "area", "clip": true, "color": "#7F1D1D", "opacity": 0.90, "interpolate": "monotone"},
+        "encoding": {"y": {"field": "band_value", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null}}
+      }
+    ]
+  },
+  "resolve": {"scale": {"x": "shared", "y": "independent"}},
+  "config": {"font": "Arial", "view": {"stroke": null}, "facet": {"spacing": 3}}
+}

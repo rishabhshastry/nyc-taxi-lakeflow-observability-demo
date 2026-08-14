@@ -1,0 +1,12 @@
+resources:
+  dashboards:
+    nyc_taxi_operations_intelligence:
+      display_name: NYC Taxi Operations Intelligence
+      file_path: ../dashboards/nyc_taxi_custom_viz.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${resources.schemas.nyc_taxi_pipeline_schema.name}
+
+      permissions:
+        - level: CAN_RUN
+          group_name: users

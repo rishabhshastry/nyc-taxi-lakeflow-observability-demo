@@ -1,0 +1,40 @@
+resources:
+  jobs:
+    nyc_taxi_dashboard_refresh:
+      name: NYC Taxi dashboard pipeline refresh
+      description: Runs the serverless NYC Taxi SDP and reports Job success/failure to Slack.
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
+      timeout_seconds: 10800
+      performance_target: PERFORMANCE_OPTIMIZED
+
+      webhook_notifications:
+        on_success:
+          - id: ${var.slack_notification_destination_id}
+        on_failure:
+          - id: ${var.slack_notification_destination_id}
+
+      notification_settings:
+        no_alert_for_skipped_runs: true
+        no_alert_for_canceled_runs: true
+
+      tasks:
+        - task_key: run_nyc_taxi_pipeline
+          description: Refresh Bronze, Silver/quarantine/DQ, and the six dashboard Gold marts.
+          timeout_seconds: 10200
+          max_retries: 0
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.nyc_taxi_dashboard.id}
+            full_refresh: false
+          webhook_notifications:
+            on_failure:
+              - id: ${var.slack_notification_destination_id}
+
+      tags:
+        workload: nyc-taxi-custom-viz
+        environment: ${bundle.target}
+
+      permissions:
+        - level: CAN_VIEW
+          group_name: users

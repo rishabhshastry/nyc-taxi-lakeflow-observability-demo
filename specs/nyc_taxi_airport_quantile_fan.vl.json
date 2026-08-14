@@ -1,0 +1,115 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "data": {"name": "databricks_query"},
+  "background": "#FFFFFF",
+  "spacing": 8,
+  "transform": [
+    {
+      "window": [{"op": "sum", "field": "bin_trip_count", "as": "cumulative_trips"}],
+      "sort": [{"field": "duration_bin_minutes", "order": "ascending"}],
+      "groupby": ["airport", "pickup_hour"]
+    },
+    {
+      "joinaggregate": [{"op": "sum", "field": "bin_trip_count", "as": "total_trips"}],
+      "groupby": ["airport", "pickup_hour"]
+    },
+    {"calculate": "datum.cumulative_trips / datum.total_trips", "as": "cumulative_share"},
+    {"calculate": "datum.cumulative_share >= 0.10 ? datum.duration_bin_minutes : null", "as": "q10_candidate"},
+    {"calculate": "datum.cumulative_share >= 0.25 ? datum.duration_bin_minutes : null", "as": "q25_candidate"},
+    {"calculate": "datum.cumulative_share >= 0.50 ? datum.duration_bin_minutes : null", "as": "q50_candidate"},
+    {"calculate": "datum.cumulative_share >= 0.75 ? datum.duration_bin_minutes : null", "as": "q75_candidate"},
+    {"calculate": "datum.cumulative_share >= 0.90 ? datum.duration_bin_minutes : null", "as": "q90_candidate"},
+    {
+      "aggregate": [
+        {"op": "min", "field": "q10_candidate", "as": "p10_minutes"},
+        {"op": "min", "field": "q25_candidate", "as": "p25_minutes"},
+        {"op": "min", "field": "q50_candidate", "as": "median_minutes"},
+        {"op": "min", "field": "q75_candidate", "as": "p75_minutes"},
+        {"op": "min", "field": "q90_candidate", "as": "p90_minutes"},
+        {"op": "max", "field": "total_trips", "as": "trip_count"}
+      ],
+      "groupby": ["airport", "pickup_hour"]
+    },
+    {"calculate": "(datum.pickup_hour < 10 ? '0' : '') + datum.pickup_hour + ':00'", "as": "hour_label"}
+  ],
+  "facet": {
+    "row": {
+      "field": "airport",
+      "type": "nominal",
+      "sort": ["JFK", "LGA", "EWR"],
+      "header": {
+        "title": null,
+        "labelAngle": 0,
+        "labelAlign": "left",
+        "labelFontSize": 13,
+        "labelFontWeight": "bold",
+        "labelColor": "#243B64"
+      }
+    }
+  },
+  "spec": {
+    "width": 650,
+    "height": 175,
+    "encoding": {
+      "x": {
+        "field": "pickup_hour",
+        "type": "quantitative",
+        "scale": {"domain": [0, 23], "nice": false},
+        "axis": {
+          "title": null,
+          "values": [0, 4, 8, 12, 16, 20, 23],
+          "labelExpr": "datum.value === 0 ? '12a' : datum.value < 12 ? datum.value + 'a' : datum.value === 12 ? '12p' : (datum.value - 12) + 'p'",
+          "grid": false,
+          "tickColor": "#D1D5DB",
+          "domainColor": "#D1D5DB",
+          "labelColor": "#4B5563"
+        }
+      }
+    },
+    "layer": [
+      {
+        "mark": {"type": "area", "color": "#8BCAE7", "opacity": 0.30, "interpolate": "monotone"},
+        "encoding": {
+          "y": {
+            "field": "p10_minutes",
+            "type": "quantitative",
+            "title": "Travel time (min)",
+            "scale": {"zero": false},
+            "axis": {"gridColor": "#E5E7EB", "labelColor": "#4B5563", "titleColor": "#4B5563"}
+          },
+          "y2": {"field": "p90_minutes"}
+        }
+      },
+      {
+        "mark": {"type": "area", "color": "#243B64", "opacity": 0.28, "interpolate": "monotone"},
+        "encoding": {
+          "y": {"field": "p25_minutes", "type": "quantitative"},
+          "y2": {"field": "p75_minutes"}
+        }
+      },
+      {
+        "mark": {"type": "line", "color": "#F2A900", "strokeWidth": 3, "interpolate": "monotone"},
+        "encoding": {"y": {"field": "median_minutes", "type": "quantitative"}}
+      },
+      {
+        "mark": {"type": "point", "filled": true, "color": "#F2A900", "stroke": "#243B64", "strokeWidth": 0.8},
+        "encoding": {
+          "y": {"field": "median_minutes", "type": "quantitative"},
+          "size": {"field": "trip_count", "type": "quantitative", "scale": {"range": [18, 90]}, "legend": null},
+          "tooltip": [
+            {"field": "airport", "title": "Airport"},
+            {"field": "hour_label", "title": "Pickup hour"},
+            {"field": "trip_count", "type": "quantitative", "format": ",d", "title": "Trips"},
+            {"field": "p10_minutes", "type": "quantitative", "format": ".0f", "title": "10th percentile"},
+            {"field": "p25_minutes", "type": "quantitative", "format": ".0f", "title": "25th percentile"},
+            {"field": "median_minutes", "type": "quantitative", "format": ".0f", "title": "Median"},
+            {"field": "p75_minutes", "type": "quantitative", "format": ".0f", "title": "75th percentile"},
+            {"field": "p90_minutes", "type": "quantitative", "format": ".0f", "title": "90th percentile"}
+          ]
+        }
+      }
+    ]
+  },
+  "resolve": {"scale": {"y": "shared"}},
+  "config": {"font": "Arial", "view": {"stroke": null}, "axis": {"labelFontSize": 11, "titleFontSize": 11}}
+}

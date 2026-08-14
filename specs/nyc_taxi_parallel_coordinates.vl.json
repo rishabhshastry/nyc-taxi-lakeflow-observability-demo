@@ -1,0 +1,91 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "data": {"name": "databricks_query"},
+  "width": "container",
+  "height": "container",
+  "background": "#FFFFFF",
+  "autosize": {"type": "fit", "contains": "padding", "resize": true},
+  "padding": {"left": 15, "right": 15, "top": 26, "bottom": 36},
+  "transform": [
+    {"calculate": "datum.pickup_zone", "as": "profile_id"},
+    {"calculate": "datum.duration_total / datum.trip_count", "as": "mean_duration_min"},
+    {"calculate": "datum.fare_per_mile_total / max(1, datum.fare_per_mile_count)", "as": "mean_fare_per_mile"},
+    {"calculate": "datum.tipped_card_count / max(1, datum.card_trip_count)", "as": "card_tip_rate"},
+    {"calculate": "datum.airport_trip_count / datum.trip_count", "as": "airport_share"},
+    {"fold": ["trip_count", "mean_duration_min", "mean_fare_per_mile", "card_tip_rate", "airport_share"]},
+    {"calculate": "datum.key === 'trip_count' ? 0 : datum.key === 'mean_duration_min' ? 1 : datum.key === 'mean_fare_per_mile' ? 2 : datum.key === 'card_tip_rate' ? 3 : 4", "as": "axis_order"},
+    {
+      "joinaggregate": [
+        {"op": "min", "field": "value", "as": "axis_min"},
+        {"op": "max", "field": "value", "as": "axis_max"}
+      ],
+      "groupby": ["key"]
+    },
+    {"calculate": "(datum.value - datum.axis_min) / max(0.000001, datum.axis_max - datum.axis_min)", "as": "norm_value"},
+    {"calculate": "datum.key === 'trip_count' ? format(datum.axis_min, '~s') : datum.key === 'mean_duration_min' ? format(datum.axis_min, '.1f') + ' min' : datum.key === 'mean_fare_per_mile' ? '$' + format(datum.axis_min, '.2f') : format(datum.axis_min, '.0%')", "as": "axis_min_label"},
+    {"calculate": "datum.key === 'trip_count' ? format(datum.axis_max, '~s') : datum.key === 'mean_duration_min' ? format(datum.axis_max, '.1f') + ' min' : datum.key === 'mean_fare_per_mile' ? '$' + format(datum.axis_max, '.2f') : format(datum.axis_max, '.0%')", "as": "axis_max_label"}
+  ],
+  "encoding": {
+    "x": {
+      "field": "key",
+      "type": "nominal",
+      "sort": ["trip_count", "mean_duration_min", "mean_fare_per_mile", "card_tip_rate", "airport_share"],
+      "axis": {
+        "title": null,
+        "labelAngle": 0,
+        "labelExpr": "datum.label === 'trip_count' ? 'TRIPS' : datum.label === 'mean_duration_min' ? 'DURATION' : datum.label === 'mean_fare_per_mile' ? '$ / MILE' : datum.label === 'card_tip_rate' ? 'TIP RATE' : 'AIRPORT %'",
+        "labelFontSize": 9,
+        "labelFontWeight": "bold",
+        "labelColor": "#4B5563",
+        "domain": false,
+        "tickColor": "#C9CDD3"
+      }
+    }
+  },
+  "layer": [
+    {"mark": {"type": "rule", "color": "#C9CDD3", "strokeWidth": 1}, "encoding": {"detail": {"aggregate": "count"}}},
+    {
+      "params": [{"name": "profile_select", "select": {"type": "point", "fields": ["profile_id"], "on": "click", "clear": "dblclick"}}],
+      "mark": {"type": "line", "strokeWidth": 1.6},
+      "encoding": {
+        "y": {"field": "norm_value", "type": "quantitative", "scale": {"domain": [0, 1]}, "axis": null},
+        "detail": {"field": "profile_id", "type": "nominal"},
+        "order": {"field": "axis_order", "type": "quantitative"},
+        "color": {
+          "field": "pickup_borough",
+          "type": "nominal",
+          "legend": {"title": null, "orient": "bottom", "direction": "horizontal"},
+          "scale": {
+            "domain": ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"],
+            "range": ["#F2A900", "#2D7F78", "#243B64", "#B84A3A", "#AB4057"]
+          }
+        },
+        "opacity": {"condition": {"param": "profile_select", "empty": false, "value": 0.92}, "value": 0.14},
+        "tooltip": [
+          {"field": "pickup_zone", "title": "Pickup zone"},
+          {"field": "pickup_borough", "title": "Borough"},
+          {"field": "trip_count", "type": "quantitative", "format": ",d", "title": "Trips in selection"},
+          {"field": "mean_duration_min", "type": "quantitative", "format": ".1f", "title": "Mean duration"},
+          {"field": "mean_fare_per_mile", "type": "quantitative", "format": "$,.2f", "title": "Mean fare / mi"},
+          {"field": "card_tip_rate", "type": "quantitative", "format": ".1%", "title": "Card tip rate"},
+          {"field": "airport_share", "type": "quantitative", "format": ".1%", "title": "Airport share"}
+        ]
+      }
+    },
+    {
+      "encoding": {"y": {"datum": 0, "type": "quantitative", "scale": {"domain": [0, 1]}}},
+      "layer": [
+        {"mark": {"type": "tick", "size": 7, "color": "#9CA3AF"}},
+        {"mark": {"type": "text", "dy": -8, "fontSize": 8, "color": "#6B7280", "stroke": "white", "strokeWidth": 3}, "encoding": {"text": {"aggregate": "min", "field": "axis_min_label"}}}
+      ]
+    },
+    {
+      "encoding": {"y": {"datum": 1, "type": "quantitative", "scale": {"domain": [0, 1]}}},
+      "layer": [
+        {"mark": {"type": "tick", "size": 7, "color": "#9CA3AF"}},
+        {"mark": {"type": "text", "dy": -9, "fontSize": 8, "color": "#6B7280", "stroke": "white", "strokeWidth": 3}, "encoding": {"text": {"aggregate": "max", "field": "axis_max_label"}}}
+      ]
+    }
+  ],
+  "config": {"font": "Arial", "view": {"stroke": null}, "legend": {"labelColor": "#4B5563", "titleColor": "#4B5563", "labelFontSize": 10}}
+}
