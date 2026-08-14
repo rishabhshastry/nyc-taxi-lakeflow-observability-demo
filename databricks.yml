@@ -13,11 +13,20 @@ variables:
     description: Isolated schema owned by the development SDP deployment.
     default: nyc_taxi_operations_sdp
   landing_schema:
-    description: Schema containing the existing TLC landing volume.
+    description: Bundle-managed schema containing the TLC landing volume.
     default: nyc_taxi_landing
   landing_volume:
-    description: Volume containing the 2025 Yellow Taxi files and zone CSV.
+    description: Bundle-managed volume for downloaded Yellow Taxi source assets.
     default: tlc_landing
+  source_year:
+    description: TLC Yellow Taxi source year loaded by the bootstrap task.
+    default: "2025"
+  source_month_count:
+    description: Number of monthly Parquet files expected for the source year.
+    default: "12"
+  tlc_source_base_url:
+    description: HTTPS base URL or internal mirror containing monthly Yellow Taxi Parquet files.
+    default: https://d37ci6vzurychx.cloudfront.net/trip-data
   metadata_volume:
     description: Dedicated volume for Auto Loader schema metadata.
     default: nyc_taxi_pipeline_metadata

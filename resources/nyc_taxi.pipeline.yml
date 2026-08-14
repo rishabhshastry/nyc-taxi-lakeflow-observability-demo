@@ -20,9 +20,9 @@ resources:
         name: nyc_taxi_pipeline_event_log
 
       configuration:
-        source.landing_path: /Volumes/${var.catalog}/${var.landing_schema}/${var.landing_volume}
-        source.expected_year: "2025"
-        source.expected_month_count: "12"
+        source.landing_path: /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_landing_schema.name}/${resources.volumes.nyc_taxi_landing.name}
+        source.expected_year: ${var.source_year}
+        source.expected_month_count: ${var.source_month_count}
         schema_location_base: /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_pipeline_schema.name}/${resources.volumes.nyc_taxi_pipeline_metadata.name}/schemas
         demo.failure_mode: none
         demo.test_run_id: normal

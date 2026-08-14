@@ -8,17 +8,19 @@ The validated demo processes 48.7 million raw trips into 45.2 million accepted S
 
 ```mermaid
 flowchart LR
-    A[2025 TLC Parquet + zone CSV] --> B[Auto Loader Bronze]
-    B --> C[Silver expectations]
-    C --> D[Accepted trips]
-    C --> E[Quarantine + DQ metrics]
-    D --> F[Six Gold marts]
-    F --> G[AI/BI dashboard]
-    H[Lakeflow Job] --> C
-    H --> I[Slack: run success/failure]
-    C --> J[SDP event log]
-    J --> K[dp.on_event_hook]
-    K --> L[Slack: flow, DQ, and failure detail]
+    A[NYC TLC HTTPS source] --> B[Idempotent staging task]
+    B --> C[Managed UC landing volume]
+    C --> D[Auto Loader Bronze]
+    D --> E[Silver expectations]
+    E --> F[Accepted trips]
+    E --> G[Quarantine + DQ metrics]
+    F --> H[Six Gold marts]
+    H --> I[AI/BI dashboard]
+    J[Lakeflow Job] --> B
+    J --> K[Slack: run success/failure]
+    E --> L[SDP event log]
+    L --> M[dp.on_event_hook]
+    M --> N[Slack: flow, DQ, and failure detail]
 ```
 
 Everything is deployable as one Databricks Asset Bundle:
@@ -26,7 +28,20 @@ Everything is deployable as one Databricks Asset Bundle:
 - `resources/nyc_taxi.dashboard.yml` deploys the AI/BI dashboard.
 - `resources/nyc_taxi.job.yml` deploys the scheduled/orchestrated Job.
 - `resources/nyc_taxi.pipeline.yml` deploys the serverless SDP.
+- `src/bootstrap/` contains the raw-data staging task and bundled taxi-zone centroids.
 - `src/nyc_taxi_pipeline/` contains Bronze, Silver, quarantine, DQ, Gold, and monitoring code.
+
+## YAML versus Python
+
+The Asset Bundle is defined in YAML: `databricks.yml` supplies variables and targets, while `resources/*.yml` declares the dashboard, Job DAG, SDP, schemas, and volumes. The executable workload is Python: one serverless script stages the raw assets and the SDP modules implement Bronze, Silver, Gold, data quality, quarantine, and `dp.on_event_hook`. The dashboard is stored as AI/BI JSON with embedded Vega-Lite specifications.
+
+## Raw-data bootstrap
+
+The Job begins with `stage_tlc_source_data`, a serverless Python task that downloads the configured year's monthly Yellow Taxi Parquet files from the official NYC TLC CloudFront endpoint into a bundle-managed Unity Catalog volume. It then copies the bundled 263-zone centroid lookup into the same landing area. The pipeline task runs only after staging succeeds.
+
+Downloads use temporary files and atomic renames. Every Parquet file must meet a minimum size and contain valid `PAR1` header/footer magic bytes; the zone CSV must contain exactly LocationIDs 1–263 and all required columns. Valid existing assets are retained, so routine runs perform a quick no-op instead of downloading roughly 820 MB again. Transient staging failures retry twice and report through the Job's Slack destination.
+
+Set `tlc_source_base_url` to an approved internal mirror if the workspace blocks public internet egress.
 
 ## Dashboard visualizations
 
@@ -101,13 +116,15 @@ Prerequisites:
 
 - Databricks CLI 0.281.0 or newer, authenticated to a workspace with serverless SDP and Unity Catalog.
 - A SQL warehouse.
-- A Unity Catalog volume containing the 12 Yellow Taxi 2025 Parquet files and the taxi-zone CSV expected by the Bronze loaders.
+- Permission to create schemas and managed volumes in the selected Unity Catalog catalog.
+- Outbound HTTPS access to the NYC TLC source, or an internal mirror supplied through `tlc_source_base_url`.
 - A Databricks Slack notification destination for Job lifecycle messages.
 - Optionally, a Slack incoming webhook for granular SDP events.
 
 Update the defaults in `databricks.yml`, or override these bundle variables for your workspace:
 
 - `catalog`, `target_schema`, `landing_schema`, `landing_volume`, and `metadata_volume`
+- `source_year`, `source_month_count`, and `tlc_source_base_url`
 - `warehouse_id`
 - `slack_notification_destination_id`
 - `hook_secret_scope`, `hook_secret_key`, and `hook_enabled`
@@ -183,6 +200,7 @@ resources/                  Bundle dashboard, Job, pipeline, schema, and volume
 scripts/                    Dashboard build and validation utilities
 specs/                      Vega-Lite specifications and embedded basemap
 sql/                        Original mart/query development SQL
+src/bootstrap/              Idempotent raw-data staging task and zone dimension
 src/nyc_taxi_pipeline/      Bronze, Silver, Gold, DQ, and event-hook code
 databricks.yml              Asset Bundle entry point and variables
 ```

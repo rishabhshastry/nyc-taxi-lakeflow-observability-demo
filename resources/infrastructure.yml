@@ -5,7 +5,19 @@ resources:
       name: ${var.target_schema}
       comment: Isolated development outputs for the NYC Taxi dashboard Lakeflow pipeline.
 
+    nyc_taxi_landing_schema:
+      catalog_name: ${var.catalog}
+      name: ${var.landing_schema}
+      comment: Bundle-managed landing area for official NYC TLC source assets.
+
   volumes:
+    nyc_taxi_landing:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.nyc_taxi_landing_schema.name}
+      name: ${var.landing_volume}
+      volume_type: MANAGED
+      comment: Idempotently staged Yellow Taxi Parquet files and taxi-zone centroids.
+
     nyc_taxi_pipeline_metadata:
       catalog_name: ${var.catalog}
       schema_name: ${resources.schemas.nyc_taxi_pipeline_schema.name}

@@ -2,11 +2,11 @@ resources:
   jobs:
     nyc_taxi_dashboard_refresh:
       name: NYC Taxi dashboard pipeline refresh
-      description: Runs the serverless NYC Taxi SDP and reports Job success/failure to Slack.
+      description: Stages official TLC source data, runs the serverless NYC Taxi SDP, and reports Job success/failure to Slack.
       max_concurrent_runs: 1
       queue:
         enabled: true
-      timeout_seconds: 10800
+      timeout_seconds: 14400
       performance_target: PERFORMANCE_OPTIMIZED
 
       webhook_notifications:
@@ -19,9 +19,39 @@ resources:
         no_alert_for_skipped_runs: true
         no_alert_for_canceled_runs: true
 
+      environments:
+        - environment_key: serverless_python
+          spec:
+            client: "4"
+
       tasks:
+        - task_key: stage_tlc_source_data
+          description: Download missing monthly Yellow Taxi Parquet files and copy the bundled taxi-zone centroids into the landing volume.
+          timeout_seconds: 3600
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          environment_key: serverless_python
+          spark_python_task:
+            python_file: ../src/bootstrap/stage_tlc_data.py
+            parameters:
+              - --landing-path
+              - /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_landing_schema.name}/${resources.volumes.nyc_taxi_landing.name}
+              - --centroids-source
+              - ${workspace.file_path}/src/bootstrap/taxi_zone_centroids.csv
+              - --source-base-url
+              - ${var.tlc_source_base_url}
+              - --year
+              - ${var.source_year}
+              - --month-count
+              - ${var.source_month_count}
+          webhook_notifications:
+            on_failure:
+              - id: ${var.slack_notification_destination_id}
+
         - task_key: run_nyc_taxi_pipeline
           description: Refresh Bronze, Silver/quarantine/DQ, and the six dashboard Gold marts.
+          depends_on:
+            - task_key: stage_tlc_source_data
           timeout_seconds: 10200
           max_retries: 0
           pipeline_task:
