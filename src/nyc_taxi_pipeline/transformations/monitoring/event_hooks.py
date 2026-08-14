@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -16,7 +17,13 @@ DESTINATION_TYPE = spark.conf.get("monitoring.hook.destination_type", "slack").l
 SECRET_SCOPE = spark.conf.get("monitoring.hook.secret_scope", "")
 SECRET_KEY = spark.conf.get("monitoring.hook.secret_key", "")
 ENVIRONMENT = spark.conf.get("monitoring.environment", "unknown")
-WORKSPACE_URL = spark.conf.get("monitoring.workspace_url", "").rstrip("/")
+WORKSPACE_URL = (
+    spark.conf.get("monitoring.workspace_url", "").strip()
+    or spark.conf.get("spark.databricks.workspaceUrl", "").strip()
+)
+if WORKSPACE_URL and not WORKSPACE_URL.startswith(("http://", "https://")):
+    WORKSPACE_URL = f"https://{WORKSPACE_URL}"
+WORKSPACE_URL = WORKSPACE_URL.rstrip("/")
 EMIT_FLOW_METRICS = (
     spark.conf.get("monitoring.hook.emit_flow_metrics", "false").lower() == "true"
 )
@@ -27,6 +34,11 @@ DQ_MIN_RECORDS = int(spark.conf.get("monitoring.hook.dq_min_records", "1000"))
 EXPECTED_WRITER_FLOWS = {
     item.strip()
     for item in spark.conf.get("monitoring.hook.expected_writer_flows", "").split(",")
+    if item.strip()
+}
+STREAMING_FLOWS = {
+    item.strip()
+    for item in spark.conf.get("monitoring.hook.streaming_flows", "").split(",")
     if item.strip()
 }
 
@@ -42,7 +54,12 @@ METRIC_KEYS = {
     "backlog_records",
     "backlog_bytes",
     "backlog_files",
+    "input_rows_per_second",
+    "processed_rows_per_second",
 }
+
+_FLOW_TIMINGS: dict[tuple[str, str, str], dict[str, datetime]] = {}
+_FLOW_TIMINGS_LOCK = Lock()
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -60,6 +77,160 @@ def _mapping(value: Any) -> dict[str, Any]:
 def _sanitize(value: Any, limit: int = 500) -> str:
     text = " ".join(str(value or "").split())
     return text[:limit]
+
+
+def _flow_key(flow_name: str) -> str:
+    return flow_name.rsplit(".", 1)[-1]
+
+
+def _flow_layer(flow_key: str) -> str:
+    if flow_key.endswith("_raw"):
+        return "Bronze"
+    if flow_key.startswith("mart_"):
+        return "Gold"
+    if flow_key in {
+        "trips_enriched_with_rejection_reasons",
+        "yellow_trips_2025_dq_metrics",
+        "taxi_zones_contract",
+    }:
+        return "Silver / DQ"
+    if flow_key in {
+        "yellow_trips_2025",
+        "yellow_trips_2025_quarantine",
+        "taxi_zones",
+    }:
+        return "Silver"
+    return "Pipeline"
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _add_observed_flow_metrics(
+    *,
+    timing_key: tuple[str, str, str],
+    state: str,
+    event_time: datetime | None,
+    metrics: dict[str, float | int],
+) -> None:
+    """Add rates derived from SDP lifecycle timestamps to terminal flow events."""
+    if not all(timing_key) or event_time is None:
+        return
+
+    with _FLOW_TIMINGS_LOCK:
+        timing = _FLOW_TIMINGS.setdefault(timing_key, {})
+        if state == "QUEUED":
+            timing.setdefault("queued_at", event_time)
+            return
+        if state == "STARTING":
+            timing.setdefault("started_at", event_time)
+            return
+        if state == "RUNNING":
+            # STARTING is normally present; RUNNING is a safe fallback when it is not.
+            timing.setdefault("started_at", event_time)
+            return
+        if state not in TERMINAL_STATES:
+            return
+        timing = _FLOW_TIMINGS.pop(timing_key, timing)
+
+    started_at = timing.get("started_at") or timing.get("queued_at")
+    queued_at = timing.get("queued_at")
+    if started_at is not None:
+        duration_seconds = max((event_time - started_at).total_seconds(), 0.001)
+        metrics.setdefault("observed_duration_seconds", duration_seconds)
+        output_rows = metrics.get("num_output_rows")
+        if isinstance(output_rows, (int, float)):
+            metrics.setdefault(
+                "avg_output_rows_per_second", output_rows / duration_seconds
+            )
+    if queued_at is not None and started_at is not None:
+        metrics.setdefault(
+            "observed_queue_seconds",
+            max((started_at - queued_at).total_seconds(), 0.0),
+        )
+
+
+def _format_number(value: Any) -> str:
+    if not isinstance(value, (int, float)):
+        return "Not reported"
+    if isinstance(value, float) and not value.is_integer():
+        return f"{value:,.2f}"
+    return f"{int(value):,}"
+
+
+def _format_bytes(value: Any) -> str:
+    if not isinstance(value, (int, float)):
+        return "Not reported"
+    amount = float(value)
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    unit = units[0]
+    for unit in units:
+        if abs(amount) < 1024 or unit == units[-1]:
+            break
+        amount /= 1024
+    return f"{amount:,.1f} {unit}"
+
+
+def _format_duration(value: Any) -> str:
+    if not isinstance(value, (int, float)):
+        return "Not reported"
+    if value < 60:
+        return f"{value:,.1f} s"
+    minutes, seconds = divmod(value, 60)
+    return f"{int(minutes):,}m {seconds:,.1f}s"
+
+
+def _throughput_text(metrics: dict[str, Any]) -> str:
+    processed_rate = metrics.get("processed_rows_per_second")
+    input_rate = metrics.get("input_rows_per_second")
+    derived_rate = metrics.get("avg_output_rows_per_second")
+    duration = metrics.get("observed_duration_seconds")
+
+    if isinstance(processed_rate, (int, float)):
+        rate_text = f"`{_format_number(processed_rate)} rows/s` processed (native)"
+    elif isinstance(input_rate, (int, float)):
+        rate_text = f"`{_format_number(input_rate)} rows/s` input (native)"
+    elif isinstance(derived_rate, (int, float)):
+        rate_text = f"`{_format_number(derived_rate)} rows/s` average output (derived)"
+    else:
+        rate_text = "Row rate unavailable; SDP emitted no row count"
+
+    if isinstance(duration, (int, float)):
+        rate_text += f"\nObserved runtime: `{_format_duration(duration)}`"
+    return rate_text
+
+
+def _backlog_text(payload: dict[str, Any]) -> str:
+    metrics = payload["metrics"]
+    backlog_values = [
+        metrics.get("backlog_records"),
+        metrics.get("backlog_files"),
+        metrics.get("backlog_bytes"),
+    ]
+    if any(value is not None for value in backlog_values):
+        return (
+            f"Records: `{_format_number(backlog_values[0])}`\n"
+            f"Files: `{_format_number(backlog_values[1])}`\n"
+            f"Bytes: `{_format_bytes(backlog_values[2])}` (native)"
+        )
+    if payload["flow_key"] in STREAMING_FLOWS:
+        if payload["state"] in {"COMPLETED", "SUCCEEDED"}:
+            return "`Drained` for this triggered update; native pending count not emitted"
+        return "Streaming flow; native pending count not emitted"
+    return "`N/A` — bounded refresh, not a streaming source"
+
+
+def _slack_escape(value: Any) -> str:
+    return str(value or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _collect_metrics(value: Any, output: dict[str, float | int]) -> None:
@@ -121,12 +292,20 @@ def _normalized_event(event: dict[str, Any]) -> dict[str, Any] | None:
         or _mapping(details.get("flow_progress")).get("name"),
         160,
     )
+    flow_key = _flow_key(flow_name)
     pipeline_id = _sanitize(origin.get("pipeline_id"), 100)
     pipeline_name = _sanitize(origin.get("pipeline_name"), 160)
     update_id = _sanitize(origin.get("update_id"), 100)
     event_id = _sanitize(event.get("id"), 120)
     metrics: dict[str, float | int] = {}
     _collect_metrics(details, metrics)
+    parsed_event_time = _parse_timestamp(event.get("timestamp"))
+    _add_observed_flow_metrics(
+        timing_key=(pipeline_id, update_id, flow_name),
+        state=state,
+        event_time=parsed_event_time,
+        metrics=metrics,
+    )
     expectations = _expectations(details)
 
     severity = "info"
@@ -160,7 +339,7 @@ def _normalized_event(event: dict[str, Any]) -> dict[str, Any] | None:
     output_rows = metrics.get("num_output_rows")
     if (
         event_type == "flow_progress"
-        and flow_name in EXPECTED_WRITER_FLOWS
+        and flow_key in EXPECTED_WRITER_FLOWS
         and state in TERMINAL_STATES
         and output_rows == 0
         and severity == "info"
@@ -169,16 +348,21 @@ def _normalized_event(event: dict[str, Any]) -> dict[str, Any] | None:
         condition = "unexpected_zero_output"
         reasons.append("num_output_rows=0")
 
+    monitored_flow = flow_key in EXPECTED_WRITER_FLOWS
     should_emit = severity != "info" or (
         EMIT_FLOW_METRICS
         and event_type == "flow_progress"
         and state in TERMINAL_STATES
-        and bool(metrics or expectations)
+        and monitored_flow
     )
     if not should_emit:
         return None
 
-    diagnostic_url = f"{WORKSPACE_URL}/pipelines/{pipeline_id}" if pipeline_id else ""
+    diagnostic_url = (
+        f"{WORKSPACE_URL}/pipelines/{pipeline_id}"
+        if WORKSPACE_URL and pipeline_id
+        else ""
+    )
     if diagnostic_url and update_id:
         diagnostic_url = f"{diagnostic_url}/updates/{update_id}"
     message = _sanitize(event.get("message"), 500)
@@ -196,6 +380,8 @@ def _normalized_event(event: dict[str, Any]) -> dict[str, Any] | None:
         "pipeline_name": pipeline_name,
         "update_id": update_id,
         "flow_name": flow_name,
+        "flow_key": flow_key,
+        "layer": _flow_layer(flow_key),
         "event_type": event_type,
         "state": state,
         "severity": severity,
@@ -215,13 +401,95 @@ def _normalized_event(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _slack_body(payload: dict[str, Any]) -> dict[str, Any]:
-    identity = payload["flow_name"] or payload["pipeline_name"] or "SDP pipeline"
+    severity = payload["severity"]
+    emoji = {"critical": "🚨", "warning": "⚠️", "info": "✅"}.get(severity, "ℹ️")
+    flow_key = payload["flow_key"] or payload["pipeline_name"] or "SDP pipeline"
+    state = payload["state"] or "METRICS"
+    metrics = payload["metrics"]
+    expectations = payload["expectations"]
+    output_rows = metrics.get("num_output_rows")
     summary = (
-        f"[{payload['severity'].upper()}] {identity}: {payload['condition']}"
-        f" ({payload['state'] or 'METRICS'})"
+        f"{emoji} [{payload['environment']}] {payload['layer']} / {flow_key}: "
+        f"{state}"
     )
-    details = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    return {"text": f"{summary}\n```{details[:3200]}```"}
+    if output_rows is not None:
+        summary += f" — {_format_number(output_rows)} output rows"
+
+    throughput_text = _throughput_text(metrics)
+    backlog_text = _backlog_text(payload)
+
+    if expectations:
+        passed = sum(item["passed_records"] for item in expectations)
+        failed = sum(item["failed_records"] for item in expectations)
+        failed_rules = [item for item in expectations if item["failed_records"] > 0]
+        dq_text = f"Passed: `{_format_number(passed)}` • Failed: `{_format_number(failed)}`"
+        if failed_rules:
+            rule_names = ", ".join(item["name"] for item in failed_rules[:5])
+            dq_text += f"\nFailing rules: `{_slack_escape(rule_names)}`"
+    else:
+        dq_text = "No expectations attached or reported for this flow event"
+
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"{emoji} {payload['layer']} flow {state.lower()}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Flow*\n`{_slack_escape(flow_key)}`"},
+                {"type": "mrkdwn", "text": f"*Environment*\n`{_slack_escape(payload['environment'])}`"},
+                {"type": "mrkdwn", "text": f"*State*\n`{_slack_escape(state)}`"},
+                {"type": "mrkdwn", "text": f"*Severity*\n`{_slack_escape(severity.upper())}`"},
+            ],
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Input rows*\n`{_format_number(metrics.get('num_input_rows'))}`"},
+                {"type": "mrkdwn", "text": f"*Output rows*\n`{_format_number(output_rows)}`"},
+                {"type": "mrkdwn", "text": f"*Output bytes*\n`{_format_bytes(metrics.get('num_output_bytes'))}`"},
+                {"type": "mrkdwn", "text": f"*Throughput*\n{throughput_text}"},
+                {"type": "mrkdwn", "text": f"*Backlog status*\n{backlog_text}"},
+                {"type": "mrkdwn", "text": f"*Data quality*\n{dq_text}"},
+            ],
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"Update `{_slack_escape(payload['update_id'])}` • "
+                        f"Event `{_slack_escape(payload['event_time'])}`"
+                    ),
+                }
+            ],
+        },
+    ]
+    if payload["diagnostic_url"].startswith("https://"):
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Open pipeline update"},
+                        "url": payload["diagnostic_url"],
+                    }
+                ],
+            }
+        )
+    return {
+        "text": summary,
+        "blocks": blocks,
+        "unfurl_links": False,
+        "unfurl_media": False,
+    }
 
 
 @dp.on_event_hook(max_allowable_consecutive_failures=3)

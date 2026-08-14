@@ -35,7 +35,8 @@ resources:
         monitoring.hook.emit_flow_metrics: "true"
         monitoring.hook.dq_failure_ratio_warn: "0.01"
         monitoring.hook.dq_min_records: "1000"
-        monitoring.hook.expected_writer_flows: yellow_trips_2025_raw,yellow_trips_2025,yellow_trips_2025_quarantine,taxi_zones,mart_airport_quantile_fan,mart_directional_flow_field,mart_od_connection_map,mart_parallel_coordinates,mart_zone_demand_horizon,mart_fare_ternary
+        monitoring.hook.expected_writer_flows: yellow_trips_2025_raw,trips_enriched_with_rejection_reasons,yellow_trips_2025,yellow_trips_2025_quarantine,yellow_trips_2025_dq_metrics,taxi_zones,taxi_zones_contract,mart_airport_quantile_fan,mart_directional_flow_field,mart_od_connection_map,mart_parallel_coordinates,mart_zone_demand_horizon,mart_fare_ternary
+        monitoring.hook.streaming_flows: yellow_trips_2025_raw,trips_enriched_with_rejection_reasons,yellow_trips_2025,yellow_trips_2025_quarantine
 
       tags:
         workload: nyc-taxi-custom-viz

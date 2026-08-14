@@ -105,6 +105,8 @@ The destination ID is a bundle variable (`slack_notification_destination_id`), s
 - Named expectation failure ratios above the configurable threshold (1% after at least 1,000 evaluated records by default).
 - Unexpected zero-row terminal writes for expected output flows.
 - Terminal per-flow input/output/upsert/delete, byte, backlog, and expectation metrics when metric delivery is enabled.
+- An observed runtime and derived average output rows/second for every flow that emits a row count, calculated from that flow's `STARTING` and terminal event timestamps.
+- Explicit backlog semantics: native record/file/byte backlog when SDP supplies it, `Drained` for successful triggered streaming flows, and `N/A — bounded refresh` for Silver/Gold materialized views where streaming backlog does not exist.
 
 The payload includes pipeline/update/flow identity, severity, condition, normalized metrics, expectation counts and ratios, an idempotency key, and a diagnostic workspace URL. Delivery is asynchronous and best-effort, uses a five-second HTTP timeout, and stops invoking the hook after a fourth consecutive failure. The published SDP event log remains the canonical source for replay and audit.
 
