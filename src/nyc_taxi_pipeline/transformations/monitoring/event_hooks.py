@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from pyspark import pipelines as dp
@@ -245,5 +246,15 @@ def send_granular_pipeline_alerts(event: dict[str, Any]) -> None:
         },
         method="POST",
     )
-    with urlopen(request, timeout=5) as response:
-        response.read(1024)
+    try:
+        with urlopen(request, timeout=5) as response:
+            response.read(1024)
+    except HTTPError as error:
+        # Slack returns concise, non-secret reason strings such as
+        # ``action_prohibited`` or ``no_active_hooks``. Preserve that signal in
+        # hook_progress while never logging the secret-backed webhook URL.
+        response_body = _sanitize(error.read(1024).decode("utf-8", "replace"), 200)
+        reason = response_body or _sanitize(error.reason, 200) or "unknown"
+        raise RuntimeError(
+            f"Webhook destination returned HTTP {error.code}: {reason}"
+        ) from error
