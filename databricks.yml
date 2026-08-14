@@ -6,6 +6,9 @@ include:
   - resources/*.yml
 
 variables:
+  resource_name_prefix:
+    description: Optional target-specific prefix used to keep development-mode resources unique.
+    default: ""
   catalog:
     description: Unity Catalog catalog containing source and output data.
     default: main
@@ -53,3 +56,11 @@ targets:
     variables:
       target_schema: nyc_taxi_operations_sdp
       hook_enabled: "false"
+
+  integration:
+    mode: development
+    variables:
+      resource_name_prefix: "Integration · "
+      target_schema: nyc_taxi_operations_integration
+      landing_schema: nyc_taxi_landing_integration
+      hook_enabled: "true"

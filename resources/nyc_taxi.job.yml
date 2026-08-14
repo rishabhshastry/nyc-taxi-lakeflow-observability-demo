@@ -1,7 +1,7 @@
 resources:
   jobs:
     nyc_taxi_dashboard_refresh:
-      name: NYC Taxi dashboard pipeline refresh
+      name: ${var.resource_name_prefix}NYC Taxi dashboard pipeline refresh
       description: Stages official TLC source data, runs the serverless NYC Taxi SDP, and reports Job success/failure to Slack.
       max_concurrent_runs: 1
       queue:

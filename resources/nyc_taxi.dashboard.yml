@@ -1,7 +1,7 @@
 resources:
   dashboards:
     nyc_taxi_operations_intelligence:
-      display_name: NYC Taxi Operations Intelligence
+      display_name: ${var.resource_name_prefix}NYC Taxi Operations Intelligence
       file_path: ../dashboards/nyc_taxi_custom_viz.lvdash.json
       warehouse_id: ${var.warehouse_id}
       dataset_catalog: ${var.catalog}

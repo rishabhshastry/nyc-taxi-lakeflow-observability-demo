@@ -1,7 +1,7 @@
 resources:
   pipelines:
     nyc_taxi_dashboard:
-      name: NYC Taxi dashboard silver and gold
+      name: ${var.resource_name_prefix}NYC Taxi dashboard silver and gold
       catalog: ${var.catalog}
       schema: ${resources.schemas.nyc_taxi_pipeline_schema.name}
       serverless: true

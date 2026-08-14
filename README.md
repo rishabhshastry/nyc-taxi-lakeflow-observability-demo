@@ -150,6 +150,18 @@ Enable granular Slack delivery at deployment time:
 databricks bundle deploy -t dev --var hook_enabled=true
 ```
 
+For a live notification drill that must not reuse the normal development
+pipeline's Auto Loader checkpoint or landing data, deploy the built-in
+`integration` target. It uses separate landing/output schemas, enables the
+event hook, and adds an `Integration ·` resource-name prefix so Databricks
+development-mode naming cannot collide with the `dev` target:
+
+```bash
+databricks bundle validate -t integration
+databricks bundle deploy -t integration
+databricks bundle run nyc_taxi_dashboard_refresh -t integration
+```
+
 Development mode prefixes resource names and the target schema with the current user. Use a separate production target and controlled schema ownership cutover before pointing a production dashboard at replacement tables.
 
 ## Build and validate the dashboard
