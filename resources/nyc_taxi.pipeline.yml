@@ -20,28 +20,36 @@ resources:
         name: nyc_taxi_pipeline_event_log
 
       configuration:
+        # CUSTOMER CHANGE POINT: source year/mirror and UC locations are controlled
+        # by databricks.yml variables. Keep schema metadata outside the landing volume.
         source.landing_path: /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_landing_schema.name}/${resources.volumes.nyc_taxi_landing.name}
         source.expected_year: ${var.source_year}
         source.expected_month_count: ${var.source_month_count}
         schema_location_base: /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_pipeline_schema.name}/${resources.volumes.nyc_taxi_pipeline_metadata.name}/schemas
-        demo.failure_mode: none
-        demo.test_run_id: normal
+        demo.failure_mode: ${var.demo_failure_mode}
+        demo.test_run_id: ${var.demo_test_run_id}
         monitoring.environment: ${bundle.target}
         monitoring.workspace_url: ${workspace.host}
+        # CUSTOMER CHANGE POINT: the hook needs a separate Slack incoming webhook.
+        # Only its secret scope/key names are configured here; never commit the URL.
         monitoring.hook.enabled: ${var.hook_enabled}
         monitoring.hook.destination_type: slack
         monitoring.hook.secret_scope: ${var.hook_secret_scope}
         monitoring.hook.secret_key: ${var.hook_secret_key}
         monitoring.hook.emit_flow_metrics: "true"
+        # CUSTOMER CHANGE POINT: tune these DQ thresholds for your operational SLOs.
         monitoring.hook.dq_failure_ratio_warn: "0.01"
         monitoring.hook.dq_min_records: "1000"
-        monitoring.hook.expected_writer_flows: yellow_trips_2025_raw,trips_enriched_with_rejection_reasons,yellow_trips_2025,yellow_trips_2025_quarantine,yellow_trips_2025_dq_metrics,taxi_zones,taxi_zones_contract,mart_airport_quantile_fan,mart_directional_flow_field,mart_od_connection_map,mart_parallel_coordinates,mart_zone_demand_horizon,mart_fare_ternary
-        monitoring.hook.streaming_flows: yellow_trips_2025_raw,trips_enriched_with_rejection_reasons,yellow_trips_2025,yellow_trips_2025_quarantine
+        # Update these lists if you rename/add pipeline flows. The hook only sends
+        # routine terminal metrics for expected flows; failures are always emitted.
+        monitoring.hook.expected_writer_flows: yellow_trips_2025_raw,yellow_trips_2025,yellow_trips_2025_quarantine,yellow_trips_2025_dq_metrics,taxi_zones,taxi_zones_contract,mart_airport_quantile_fan,mart_directional_flow_field,mart_od_connection_map,mart_parallel_coordinates,mart_zone_demand_horizon,mart_fare_ternary
+        monitoring.hook.streaming_flows: yellow_trips_2025_raw,yellow_trips_2025,yellow_trips_2025_quarantine
 
       tags:
         workload: nyc-taxi-custom-viz
         environment: ${bundle.target}
 
       permissions:
+        # CUSTOMER CHANGE POINT: replace with the group that should inspect the SDP.
         - level: CAN_VIEW
           group_name: users

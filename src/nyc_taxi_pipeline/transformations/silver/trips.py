@@ -7,6 +7,9 @@ from common import silver_trip_projection, with_trip_quality_columns
 
 EXPECTED_YEAR = int(spark.conf.get("source.expected_year", "2025"))
 
+# CUSTOMER CHANGE POINT: adapt these SQL expectation expressions to your data
+# contract. Keep the equivalent rejection logic in common.py synchronized so
+# accepted, quarantined, and reported DQ counts use the same rules.
 TRIP_QUALITY_EXPECTATIONS = {
     "pickup_year_is_expected": f"year(tpep_pickup_datetime) = {EXPECTED_YEAR}",
     "dropoff_after_pickup": "tpep_dropoff_datetime > tpep_pickup_datetime",

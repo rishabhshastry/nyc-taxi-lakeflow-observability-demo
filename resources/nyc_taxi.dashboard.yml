@@ -3,10 +3,14 @@ resources:
     nyc_taxi_operations_intelligence:
       display_name: ${var.resource_name_prefix}NYC Taxi Operations Intelligence
       file_path: ../dashboards/nyc_taxi_custom_viz.lvdash.json
+      # CUSTOMER CHANGE POINT: both values are resolved from deployment variables;
+      # no catalog, schema, or warehouse is embedded in the dashboard source.
       warehouse_id: ${var.warehouse_id}
       dataset_catalog: ${var.catalog}
       dataset_schema: ${resources.schemas.nyc_taxi_pipeline_schema.name}
 
       permissions:
+        # CUSTOMER CHANGE POINT: replace `users` with your dashboard consumer group
+        # if workspace-wide CAN_RUN access is not appropriate.
         - level: CAN_RUN
           group_name: users

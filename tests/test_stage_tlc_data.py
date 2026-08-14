@@ -3,16 +3,43 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.bootstrap.stage_tlc_data import (
     copy_atomic,
     download_atomic,
+    stage_tlc_assets,
     valid_centroids,
     valid_parquet,
 )
 
 
 class StageTlcDataTest(unittest.TestCase):
+    def test_configured_year_controls_landing_directory(self) -> None:
+        asset = {"name": "asset", "status": "retained", "bytes": 1}
+        with patch(
+            "src.bootstrap.stage_tlc_data.download_atomic", return_value=asset
+        ) as download, patch(
+            "src.bootstrap.stage_tlc_data.copy_atomic", return_value=asset
+        ):
+            stage_tlc_assets(
+                landing_path=Path("/Volumes/catalog/schema/landing"),
+                centroids_source=Path("centroids.csv"),
+                source_base_url="https://example.test/trips",
+                year=2024,
+                month_count=1,
+                overwrite=False,
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(
+            Path(
+                "/Volumes/catalog/schema/landing/yellow_2024/"
+                "yellow_tripdata_2024-01.parquet"
+            ),
+            download.call_args.args[1],
+        )
+
     def test_download_is_atomic_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,17 +1,33 @@
+# CUSTOMER DEPLOYMENT CHECKLIST
+# -----------------------------
+# Supply these three workspace-specific variables before validation/deployment:
+#   catalog, warehouse_id, slack_notification_destination_id
+# Pass them with `--var`, or set them under the target's `variables` block below.
+# Keep the Slack incoming-webhook URL out of this file; store it in the secret
+# scope/key named by hook_secret_scope and hook_secret_key.
+#
+# The remaining defaults are demo-safe names and can be changed to match your
+# naming standards, source mirror, or data-retention conventions.
 bundle:
   name: nyc_taxi_pipeline_monitoring
+  # CUSTOMER CHANGE POINT: generate a new UUID only if this fork must coexist as
+  # a distinct bundle with another copy of the demo in the same workspace/target.
   uuid: 43cb59ce-b49a-480d-aa54-63c9026c2f16
 
 include:
   - resources/*.yml
 
 variables:
+  # CUSTOMER CHANGE POINT: optional prefix displayed on the Job, pipeline, and dashboard.
   resource_name_prefix:
     description: Optional target-specific prefix used to keep development-mode resources unique.
     default: ""
+
+  # CUSTOMER CHANGE POINT (required): an existing Unity Catalog catalog in this workspace.
+  # This has no fallback so a missing override fails safely before resource creation.
   catalog:
     description: Unity Catalog catalog containing source and output data.
-    default: main
+  # These schemas and volumes are created and managed by the bundle.
   target_schema:
     description: Isolated schema owned by the development SDP deployment.
     default: nyc_taxi_operations_sdp
@@ -33,15 +49,22 @@ variables:
   metadata_volume:
     description: Dedicated volume for Auto Loader schema metadata.
     default: nyc_taxi_pipeline_metadata
+
+  # CUSTOMER CHANGE POINT (required): copy the UUID from a workspace notification
+  # destination configured for Slack. This is used by the Job, not by the SDP hook.
   slack_notification_destination_id:
     description: Existing Databricks Slack notification destination for Job lifecycle events.
-    default: 00000000-0000-0000-0000-000000000000
+
+  # CUSTOMER CHANGE POINT (required): ID of the SQL warehouse used by the dashboard.
   warehouse_id:
     description: SQL warehouse used by the AI/BI dashboard.
-    default: REPLACE_WITH_SQL_WAREHOUSE_ID
+
+  # Set true only after creating the separate incoming-webhook secret described below.
   hook_enabled:
     description: Whether the SDP event hook posts granular events to its secret-backed webhook.
     default: "false"
+
+  # CUSTOMER CHANGE POINT: these are secret identifiers, never the webhook value.
   hook_secret_scope:
     description: Secret scope containing the direct Slack incoming-webhook URL.
     default: nyc-taxi-monitoring
@@ -49,18 +72,21 @@ variables:
     description: Secret key containing the direct Slack incoming-webhook URL.
     default: slack-webhook-url
 
+  # Alert-drill controls. Leave these defaults unchanged for normal runs.
+  demo_failure_mode:
+    description: Set to expectation temporarily to verify failure notifications.
+    default: none
+  demo_test_run_id:
+    description: Optional correlation label included in the reversible alert drill.
+    default: normal
+
 targets:
+  # Development mode prefixes resources/schemas with the deploying user's identity.
+  # CUSTOMER CHANGE POINT: add your required variables here if your team prefers
+  # checked-in, non-secret environment configuration over repeated `--var` flags.
   dev:
     default: true
     mode: development
     variables:
       target_schema: nyc_taxi_operations_sdp
       hook_enabled: "false"
-
-  integration:
-    mode: development
-    variables:
-      resource_name_prefix: "Integration · "
-      target_schema: nyc_taxi_operations_integration
-      landing_schema: nyc_taxi_landing_integration
-      hook_enabled: "true"

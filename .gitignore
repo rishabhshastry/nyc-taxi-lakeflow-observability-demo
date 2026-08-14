@@ -6,12 +6,8 @@
 __pycache__/
 *.py[cod]
 
-# Workspace-specific deployment payloads and validation output
-deployment/create_dashboard.json
-deployment/deployment.json
-deployment/query_validation.json
-deployment/update_dashboard.json
-deployment/previews/
+# Generated live-validation output (never part of the deployable bundle)
+/deployment/
 
 # Local research and capture artifacts
 comparison/

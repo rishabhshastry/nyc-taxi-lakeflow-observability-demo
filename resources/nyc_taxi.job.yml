@@ -9,6 +9,8 @@ resources:
       timeout_seconds: 14400
       performance_target: PERFORMANCE_OPTIMIZED
 
+      # CUSTOMER CHANGE POINT: this UUID must identify an existing Databricks
+      # notification destination. It is distinct from the hook's webhook secret.
       webhook_notifications:
         on_success:
           - id: ${var.slack_notification_destination_id}
@@ -34,6 +36,8 @@ resources:
           spark_python_task:
             python_file: ../src/bootstrap/stage_tlc_data.py
             parameters:
+              # CUSTOMER CHANGE POINT: these paths and source settings are assembled
+              # from bundle variables; change the variables, not the generated paths.
               - --landing-path
               - /Volumes/${var.catalog}/${resources.schemas.nyc_taxi_landing_schema.name}/${resources.volumes.nyc_taxi_landing.name}
               - --centroids-source
@@ -66,5 +70,6 @@ resources:
         environment: ${bundle.target}
 
       permissions:
+        # CUSTOMER CHANGE POINT: replace with the operator group that should view runs.
         - level: CAN_VIEW
           group_name: users

@@ -3,6 +3,8 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
+# CUSTOMER CHANGE POINT: all environment values are injected by the pipeline
+# resource. Change databricks.yml variables rather than hardcoding UC paths here.
 LANDING_PATH = spark.conf.get("source.landing_path")
 SCHEMA_LOCATION_BASE = spark.conf.get("schema_location_base")
 EXPECTED_YEAR = int(spark.conf.get("source.expected_year", "2025"))
@@ -32,7 +34,7 @@ def yellow_trips_2025_raw():
         )
         .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
         .option("rescuedDataColumn", "_rescued_data")
-        .load(f"{LANDING_PATH}/yellow_2025")
+        .load(f"{LANDING_PATH}/yellow_{EXPECTED_YEAR}")
         .withColumn("_source_file", F.col("_metadata.file_path"))
         .withColumn(
             "_source_file_modification_time",

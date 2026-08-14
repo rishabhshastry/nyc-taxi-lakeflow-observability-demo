@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+# CUSTOMER CHANGE POINT: normally override `tlc_source_base_url` in the bundle
+# instead of editing this fallback. Use an approved internal mirror when public
+# HTTPS egress is unavailable from serverless compute.
 DEFAULT_SOURCE_BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 PARQUET_MINIMUM_BYTES = 10_000_000
 CENTROID_COLUMNS = {

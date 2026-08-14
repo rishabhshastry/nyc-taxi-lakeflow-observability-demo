@@ -16,6 +16,9 @@ SUPPORTED_BOROUGHS = (
 )
 NON_AIRPORT_BOROUGHS = SUPPORTED_BOROUGHS[:-1]
 
+# CUSTOMER CHANGE POINT: if you alter the trip-quality contract, keep this
+# rejection-reason list/expressions synchronized with TRIP_QUALITY_EXPECTATIONS
+# in transformations/silver/trips.py so quarantine and expectation metrics agree.
 QUALITY_RULES = (
     "pickup_year_not_expected",
     "dropoff_not_after_pickup",

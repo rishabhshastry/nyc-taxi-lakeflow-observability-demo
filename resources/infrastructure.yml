@@ -1,4 +1,6 @@
 resources:
+  # CUSTOMER CHANGE POINT: names come from databricks.yml. The bundle creates
+  # these schemas/volumes inside the required `catalog` supplied at deployment.
   schemas:
     nyc_taxi_pipeline_schema:
       catalog_name: ${var.catalog}
@@ -11,6 +13,8 @@ resources:
       comment: Bundle-managed landing area for official NYC TLC source assets.
 
   volumes:
+    # This managed volume holds the downloaded source files. Use an external
+    # volume instead if your organization's retention/governance policy requires it.
     nyc_taxi_landing:
       catalog_name: ${var.catalog}
       schema_name: ${resources.schemas.nyc_taxi_landing_schema.name}

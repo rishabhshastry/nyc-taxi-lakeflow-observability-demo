@@ -12,6 +12,10 @@ from urllib.request import Request, urlopen
 
 from pyspark import pipelines as dp
 
+# CUSTOMER CHANGE POINT: these values are injected by resources/nyc_taxi.pipeline.yml.
+# Job lifecycle notifications use a Databricks destination ID, while this hook
+# requires a separate incoming-webhook URL stored in the configured secret.
+# Never place the webhook value in source code or bundle YAML.
 HOOK_ENABLED = spark.conf.get("monitoring.hook.enabled", "false").lower() == "true"
 DESTINATION_TYPE = spark.conf.get("monitoring.hook.destination_type", "slack").lower()
 SECRET_SCOPE = spark.conf.get("monitoring.hook.secret_scope", "")

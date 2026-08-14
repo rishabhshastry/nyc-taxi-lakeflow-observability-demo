@@ -35,6 +35,23 @@ Everything is deployable as one Databricks Asset Bundle:
 
 The Asset Bundle is defined in YAML: `databricks.yml` supplies variables and targets, while `resources/*.yml` declares the dashboard, Job DAG, SDP, schemas, and volumes. The executable workload is Python: one serverless script stages the raw assets and the SDP modules implement Bronze, Silver, Gold, data quality, quarantine, and `dp.on_event_hook`. The dashboard is stored as AI/BI JSON with embedded Vega-Lite specifications.
 
+## Customer change points
+
+Comments marked `CUSTOMER CHANGE POINT` identify the intended adaptation surface. A normal deployment should not require editing generated dashboard JSON or hardcoding workspace paths in Python.
+
+| Change point | Where to configure it |
+|---|---|
+| Unity Catalog catalog, SQL warehouse, and Job Slack destination | Required variables in `databricks.yml`; set them under the target or pass `--var` |
+| Output/landing schema and volume names | Optional variable defaults in `databricks.yml` |
+| Public TLC endpoint versus an internal mirror | `tlc_source_base_url` in `databricks.yml` |
+| Dashboard, Job, and pipeline access groups | `permissions` blocks in `resources/*.yml` |
+| Granular Slack hook | `hook_enabled` plus the secret scope/key variables; the webhook value stays in Databricks Secrets |
+| DQ warning threshold and monitored flow lists | Pipeline configuration in `resources/nyc_taxi.pipeline.yml` |
+| Trip-quality business rules | `transformations/silver/trips.py` and the matching rejection logic in `common.py` |
+| Gold mart names or dashboard field contracts | Gold transformation modules, then `scripts/build_dashboard.py` and `specs/` |
+
+The included table names and dashboard copy are intentionally specific to the 2025 Yellow Taxi demo. If you change the source year or replace the dataset, update those names, labels, DQ rules, and visualization contracts together.
+
 ## Raw-data bootstrap
 
 The Job begins with `stage_tlc_source_data`, a serverless Python task that downloads the configured year's monthly Yellow Taxi Parquet files from the official NYC TLC CloudFront endpoint into a bundle-managed Unity Catalog volume. It then copies the bundled 263-zone centroid lookup into the same landing area. The pipeline task runs only after staging succeeds.
@@ -123,13 +140,24 @@ Prerequisites:
 - A Databricks Slack notification destination for Job lifecycle messages.
 - Optionally, a Slack incoming webhook for granular SDP events.
 
-Update the defaults in `databricks.yml`, or override these bundle variables for your workspace:
+Before deploying, set the three required, non-secret values under `targets.dev.variables` in `databricks.yml`:
 
-- `catalog`, `target_schema`, `landing_schema`, `landing_volume`, and `metadata_volume`
+```yaml
+targets:
+  dev:
+    variables:
+      catalog: your_unity_catalog
+      warehouse_id: your_sql_warehouse_id
+      slack_notification_destination_id: your_notification_destination_uuid
+      hook_enabled: "true" # Set false until the incoming-webhook secret exists.
+```
+
+The file deliberately provides no fallback for these values, so an uncustomized deployment fails safely. You can instead supply them with `--var`. Other optional variables are:
+
+- `target_schema`, `landing_schema`, `landing_volume`, and `metadata_volume`
 - `source_year`, `source_month_count`, and `tlc_source_base_url`
-- `warehouse_id`
-- `slack_notification_destination_id`
 - `hook_secret_scope`, `hook_secret_key`, and `hook_enabled`
+- `demo_failure_mode` and `demo_test_run_id` for a temporary notification drill
 
 Create the hook secret without placing the webhook in source control:
 
@@ -146,25 +174,22 @@ databricks bundle deploy -t dev
 databricks bundle run nyc_taxi_dashboard_refresh -t dev
 ```
 
-Enable granular Slack delivery at deployment time:
+If you prefer command-line overrides, repeat the required values for validation and deployment:
 
 ```bash
-databricks bundle deploy -t dev --var hook_enabled=true
+databricks bundle validate -t dev \
+  --var catalog=your_unity_catalog \
+  --var warehouse_id=your_sql_warehouse_id \
+  --var slack_notification_destination_id=your_notification_destination_uuid
+
+databricks bundle deploy -t dev \
+  --var catalog=your_unity_catalog \
+  --var warehouse_id=your_sql_warehouse_id \
+  --var slack_notification_destination_id=your_notification_destination_uuid \
+  --var hook_enabled=true
 ```
 
-For a live notification drill that must not reuse the normal development
-pipeline's Auto Loader checkpoint or landing data, deploy the built-in
-`integration` target. It uses separate landing/output schemas, enables the
-event hook, and adds an `Integration ·` resource-name prefix so Databricks
-development-mode naming cannot collide with the `dev` target:
-
-```bash
-databricks bundle validate -t integration
-databricks bundle deploy -t integration
-databricks bundle run nyc_taxi_dashboard_refresh -t integration
-```
-
-Development mode prefixes resource names and the target schema with the current user. Use a separate production target and controlled schema ownership cutover before pointing a production dashboard at replacement tables.
+Development mode prefixes resource names and schemas with the current user. Add a separate `mode: production` target and use controlled schema ownership/cutover before treating this demo as a production workload.
 
 ## Build and validate the dashboard
 
@@ -175,13 +200,13 @@ uv venv
 uv pip install -r requirements-dev.txt
 ```
 
-Rebuild the dashboard source with deployment defaults:
+Rebuild the dashboard source after changing a visualization or dataset contract:
 
 ```bash
-DATABRICKS_WAREHOUSE_ID=your-warehouse-id \
-DATABRICKS_DASHBOARD_PARENT_PATH=/Users/your-user-name \
 uv run scripts/build_dashboard.py
 ```
+
+The builder only produces the portable dashboard source. Catalog, schema, warehouse, permissions, and workspace paths remain Asset Bundle settings.
 
 Run the static contract and Vega-Lite checks:
 
@@ -203,7 +228,7 @@ uv run scripts/validate_dashboard_queries.py \
 
 Silver applies six named expectations covering the expected pickup year, chronological pickup/dropoff order, 1–180 minute duration, 0.1–100 mile distance, nonnegative bounded total amount, and valid TLC location IDs. Invalid rows retain every rejection reason in quarantine, while `yellow_trips_2025_dq_metrics` publishes total, accepted, rejected, per-rule failure counts, and failure rates.
 
-The repository includes a reversible failure drill (`failure_drill.py`) for validating the notification path without permanently changing the production rules.
+The repository includes a reversible failure drill (`failure_drill.py`) for validating the notification path without permanently changing the production rules. Temporarily deploy with `--var demo_failure_mode=expectation`, run the Job, confirm the expected failure notifications, and redeploy with `--var demo_failure_mode=none`. Prefer a separate target for recurring drills so normal checkpoints and schedules are never interrupted.
 
 ## Repository layout
 
@@ -213,7 +238,6 @@ docs/images/                Rendered visualization previews
 resources/                  Bundle dashboard, Job, pipeline, schema, and volume
 scripts/                    Dashboard build and validation utilities
 specs/                      Vega-Lite specifications and embedded basemap
-sql/                        Original mart/query development SQL
 src/bootstrap/              Idempotent raw-data staging task and zone dimension
 src/nyc_taxi_pipeline/      Bronze, Silver, Gold, DQ, and event-hook code
 databricks.yml              Asset Bundle entry point and variables

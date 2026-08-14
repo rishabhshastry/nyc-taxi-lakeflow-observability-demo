@@ -4,14 +4,10 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID", "")
-DISPLAY_NAME = "NYC Taxi Operations Intelligence"
-PARENT_PATH = os.getenv("DATABRICKS_DASHBOARD_PARENT_PATH", "/Users/<user-name>")
 BASEMAP_FEATURES = json.loads(
     (ROOT / "specs" / "nyc_taxi_zone_basemap.geojson").read_text(encoding="utf-8")
 )["features"]
@@ -159,6 +155,9 @@ def custom_widget(
 
 
 def build() -> dict[str, Any]:
+    # CUSTOMER CHANGE POINT: if Gold table names or output columns change, update
+    # these dataset queries and their matching widget field lists together.
+    # Catalog/schema/warehouse values intentionally stay in the Asset Bundle.
     datasets = [
         dataset(
             "airport_quantile",
@@ -486,30 +485,10 @@ def build() -> dict[str, Any]:
 def main() -> None:
     dashboard = build()
     dashboard_path = ROOT / "dashboards" / "nyc_taxi_custom_viz.lvdash.json"
-    payload_path = ROOT / "deployment" / "create_dashboard.json"
-    update_payload_path = ROOT / "deployment" / "update_dashboard.json"
     dashboard_path.parent.mkdir(parents=True, exist_ok=True)
-    payload_path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(dashboard, indent=2) + "\n"
     dashboard_path.write_text(serialized, encoding="utf-8")
-    payload = {
-        "display_name": DISPLAY_NAME,
-        "parent_path": PARENT_PATH,
-        "serialized_dashboard": serialized,
-        "warehouse_id": WAREHOUSE_ID,
-    }
-    payload_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    update_payload = {
-        "display_name": DISPLAY_NAME,
-        "serialized_dashboard": serialized,
-        "warehouse_id": WAREHOUSE_ID,
-    }
-    update_payload_path.write_text(
-        json.dumps(update_payload, indent=2) + "\n", encoding="utf-8"
-    )
     print(dashboard_path)
-    print(payload_path)
-    print(update_payload_path)
 
 
 if __name__ == "__main__":
